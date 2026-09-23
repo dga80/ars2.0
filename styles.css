@@ -162,7 +162,7 @@ button {
   letter-spacing: 0.05em;
   color: var(--text-muted);
   padding: 2px 4px;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast), transform var(--transition-fast);
 }
 
 .lang-btn.active, .lang-btn:hover {
@@ -172,6 +172,17 @@ button {
 .lang-divider {
   opacity: 0.3;
   font-size: 0.7rem;
+}
+
+/* Transición elegante y perceptible al cambiar de idioma */
+[data-i18n] {
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), filter 0.35s ease !important;
+}
+
+body.lang-switching [data-i18n] {
+  opacity: 0 !important;
+  transform: translateY(6px) !important;
+  filter: blur(1.5px) !important;
 }
 
 /* ==========================================================================
