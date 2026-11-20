@@ -13,25 +13,63 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy via LFTP (FTPS)
+      - name: Deploy via Python FTPS
         env:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
-          lftp -e "
-            set ssl:verify-certificate no;
-            set ftp:ssl-allow yes;
-            set ftp:ssl-force no;
-            set ftp:passive-mode true;
-            open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            mirror -R -v \
-              --exclude-glob .git* \
-              --exclude-glob ars2-web.zip \
-              --exclude-glob GEMINI.md \
-              --exclude-glob rewebars \
-              --exclude-glob .DS_Store \
-              ./ /ars2/;
-            quit
-          "
+          python3 - << 'PYEOF'
+          import os, sys, ssl
+          from ftplib import FTP_TLS
+
+          server = os.environ['FTP_SERVER']
+          user = os.environ['FTP_USERNAME']
+          passwd = os.environ['FTP_PASSWORD']
+          remote_base = '/ars2'
+
+          print(f"Conectando a {server}...")
+          ftps = FTP_TLS()
+          ftps.ssl_version = ssl.PROTOCOL_TLSv1_2
+          ftps.connect(server, 21, timeout=30)
+          ftps.auth()
+          ftps.login(user, passwd)
+          ftps.prot_p()
+          ftps.set_pasv(True)
+          print("Conexión y autenticación exitosa.")
+
+          # Verificar o crear directorio remoto
+          try:
+              ftps.cwd(remote_base)
+          except Exception:
+              ftps.mkd(remote_base)
+              ftps.cwd(remote_base)
+
+          exclude_names = {'.git', '.github', 'ars2-web.zip', 'GEMINI.md', 'rewebars', '.DS_Store'}
+
+          def upload_dir(local_path, remote_path):
+              try:
+                  ftps.cwd(remote_path)
+              except Exception:
+                  try:
+                      ftps.mkd(remote_path)
+                      ftps.cwd(remote_path)
+                  except Exception as e:
+                      print(f"Error creando directorio {remote_path}: {e}")
+
+              items = os.listdir(local_path)
+              for item in items:
+                  if item in exclude_names or item.startswith('.git'):
+                      continue
+                  local_item_path = os.path.join(local_path, item)
+                  if os.path.isdir(local_item_path):
+                      upload_dir(local_item_path, f"{remote_path}/{item}")
+                  else:
+                      print(f"Subiendo: {item}...")
+                      with open(local_item_path, 'rb') as f:
+                          ftps.storbinary(f'STOR {item}', f)
+
+          upload_dir('.', remote_base)
+          ftps.quit()
+          print("¡Despliegue completado con éxito!")
+          PYEOF
