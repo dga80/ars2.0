@@ -13,15 +13,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy via Python FTPS
+      - name: Deploy via Python FTP
         env:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
         run: |
           python3 - << 'PYEOF'
-          import os, sys, ssl
-          from ftplib import FTP_TLS
+          import os, sys
+          from ftplib import FTP
 
           server = os.environ['FTP_SERVER']
           user = os.environ['FTP_USERNAME']
@@ -29,31 +29,27 @@ jobs:
           remote_base = '/ars2'
 
           print(f"Conectando a {server}...")
-          ftps = FTP_TLS()
-          ftps.ssl_version = ssl.PROTOCOL_TLSv1_2
-          ftps.connect(server, 21, timeout=30)
-          ftps.auth()
-          ftps.login(user, passwd)
-          ftps.prot_p()
-          ftps.set_pasv(True)
+          ftp = FTP(timeout=30)
+          ftp.connect(server, 21)
+          ftp.login(user, passwd)
+          ftp.set_pasv(True)
           print("Conexión y autenticación exitosa.")
 
-          # Verificar o crear directorio remoto
           try:
-              ftps.cwd(remote_base)
+              ftp.cwd(remote_base)
           except Exception:
-              ftps.mkd(remote_base)
-              ftps.cwd(remote_base)
+              ftp.mkd(remote_base)
+              ftp.cwd(remote_base)
 
           exclude_names = {'.git', '.github', 'ars2-web.zip', 'GEMINI.md', 'rewebars', '.DS_Store'}
 
           def upload_dir(local_path, remote_path):
               try:
-                  ftps.cwd(remote_path)
+                  ftp.cwd(remote_path)
               except Exception:
                   try:
-                      ftps.mkd(remote_path)
-                      ftps.cwd(remote_path)
+                      ftp.mkd(remote_path)
+                      ftp.cwd(remote_path)
                   except Exception as e:
                       print(f"Error creando directorio {remote_path}: {e}")
 
@@ -67,9 +63,9 @@ jobs:
                   else:
                       print(f"Subiendo: {item}...")
                       with open(local_item_path, 'rb') as f:
-                          ftps.storbinary(f'STOR {item}', f)
+                          ftp.storbinary(f'STOR {item}', f)
 
           upload_dir('.', remote_base)
-          ftps.quit()
+          ftp.quit()
           print("¡Despliegue completado con éxito!")
           PYEOF
