@@ -240,6 +240,61 @@ $updatedLabel = !empty($data['updated_at'])
     ? date('d/m/Y · H:i', strtotime($data['updated_at']))
     : 'Sense activitat registrada encara';
 
+// Agregació per mesos (12 mesos per cada any disponible) i per anys
+$yearsSet = [date('Y') => true];
+foreach (array_keys($data['months']) as $ymKey) {
+    $yPart = substr($ymKey, 0, 4);
+    if (preg_match('/^\d{4}$/', $yPart)) {
+        $yearsSet[$yPart] = true;
+    }
+}
+$availableYears = array_keys($yearsSet);
+sort($availableYears);
+
+$extractRow = function ($bucket) {
+    $visits = (int)($bucket['visit_google'] ?? 0) + (int)($bucket['visit_ai'] ?? 0) + (int)($bucket['visit_social'] ?? 0) + (int)($bucket['visit_direct'] ?? 0);
+    $google = (int)($bucket['visit_google'] ?? 0);
+    $ai     = (int)($bucket['visit_ai'] ?? 0);
+    $chat   = (int)($bucket['chat_message'] ?? 0);
+    $wa     = (int)($bucket['chat_to_wa'] ?? 0) + (int)($bucket['web_wa'] ?? 0);
+    $form   = (int)($bucket['web_form_direct'] ?? 0) + (int)($bucket['web_form_from_chat'] ?? 0);
+    return [
+        'visits' => $visits,
+        'google' => $google,
+        'ai'     => $ai,
+        'chat'   => $chat,
+        'wa'     => $wa,
+        'form'   => $form,
+        'leads'  => $wa + $form,
+    ];
+};
+
+$monthlyByYear = [];
+$yearlySeries  = [];
+foreach ($availableYears as $yr) {
+    $monthlyByYear[$yr] = [];
+    $yrTotals = ['label' => $yr, 'visits' => 0, 'google' => 0, 'ai' => 0, 'chat' => 0, 'wa' => 0, 'form' => 0, 'leads' => 0];
+    foreach ($monthNames as $mm => $mLabel) {
+        $ymKey = "{$yr}-{$mm}";
+        $row = $extractRow($data['months'][$ymKey] ?? []);
+        $row['label'] = $mLabel;
+        $row['fullLabel'] = "{$mLabel} {$yr}";
+        $monthlyByYear[$yr][] = $row;
+        foreach (['visits', 'google', 'ai', 'chat', 'wa', 'form', 'leads'] as $f) {
+            $yrTotals[$f] += $row[$f];
+        }
+    }
+    $yrTotals['fullLabel'] = "Any {$yr}";
+    $yearlySeries[] = $yrTotals;
+}
+
+$chartPayload = [
+    'currentYear'   => date('Y'),
+    'years'         => array_reverse($availableYears),
+    'monthlyByYear' => $monthlyByYear,
+    'yearly'        => $yearlySeries,
+];
+
 $reqPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 $isPrettyUrl = (strpos($reqPath, '/panell-ars') === 0);
 $buildUrl = function ($period) use ($isPrettyUrl, $key) {
@@ -710,6 +765,169 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       border-radius: 3px;
     }
 
+    /* Interactive Monthly / Yearly SVG Chart */
+    .evo-panel {
+      margin-bottom: 16px;
+    }
+
+    .evo-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .seg-tabs {
+      display: inline-flex;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .seg-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(193, 12, 19, 0.22);
+    }
+
+    .year-select {
+      font-family: inherit;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--text-main);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 6px 12px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .year-select:focus {
+      border-color: var(--accent);
+    }
+
+    .evo-stage {
+      position: relative;
+      width: 100%;
+    }
+
+    .evo-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 4px;
+    }
+
+    .evo-svg {
+      display: block;
+      width: 100%;
+      min-width: 560px;
+      height: 240px;
+      overflow: visible;
+    }
+
+    .evo-grid-line {
+      stroke: rgba(40, 20, 20, 0.08);
+      stroke-dasharray: 3 4;
+    }
+
+    .evo-axis-text {
+      font-family: var(--sans);
+      font-size: 11px;
+      fill: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .evo-val-text {
+      font-family: var(--sans);
+      font-size: 10px;
+      font-weight: 700;
+      fill: var(--text-main);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .evo-bar {
+      transition: opacity 0.18s ease;
+    }
+
+    .evo-hit {
+      fill: transparent;
+      cursor: pointer;
+    }
+
+    .evo-hit:hover ~ .evo-bar,
+    .evo-col.is-active .evo-bar {
+      opacity: 1;
+    }
+
+    .evo-col.is-active .evo-col-bg {
+      fill: rgba(193, 12, 19, 0.05);
+    }
+
+    .evo-tooltip {
+      margin-top: 12px;
+      padding: 11px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--text-body);
+    }
+
+    .evo-tooltip strong {
+      color: var(--text-main);
+      font-weight: 700;
+    }
+
+    .evo-tooltip-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .legend-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 5px 10px;
+      border-radius: 9999px;
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--text-body);
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .legend-toggle.is-off {
+      opacity: 0.42;
+      text-decoration: line-through;
+    }
+
     .footer-note {
       margin-top: 22px;
       text-align: center;
@@ -903,6 +1121,43 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       </article>
     </section>
 
+    <!-- Interactive Monthly / Yearly Evolution Chart -->
+    <section class="panel evo-panel" id="evoChartPanel">
+      <div class="panel-head">
+        <div>
+          <h2 class="panel-title">Evolució per mesos i anys</h2>
+        </div>
+        <div class="evo-controls">
+          <div class="seg-tabs" role="tablist" aria-label="Vista temporal">
+            <button type="button" class="seg-btn active" data-evo-mode="monthly" role="tab" aria-selected="true">Per mesos</button>
+            <button type="button" class="seg-btn" data-evo-mode="yearly" role="tab" aria-selected="false">Per anys</button>
+          </div>
+          <select id="evoYearSelect" class="year-select" aria-label="Seleccionar any"></select>
+        </div>
+      </div>
+
+      <div class="evo-stage">
+        <div class="evo-scroll">
+          <svg id="evoSvg" class="evo-svg" viewBox="0 0 760 240" preserveAspectRatio="none" role="img" aria-label="Gràfic evolutiu per mesos i anys"></svg>
+        </div>
+        <div class="evo-tooltip" id="evoTooltip">
+          <span>Toca o passa el cursor sobre un mes o any per veure'n el detall.</span>
+        </div>
+      </div>
+
+      <div class="chart-legend" id="evoLegend">
+        <button type="button" class="legend-toggle" data-series="visits">
+          <span class="legend-dot" style="background:#d9b8b7"></span> Visites
+        </button>
+        <button type="button" class="legend-toggle" data-series="chat">
+          <span class="legend-dot" style="background:#c10c13"></span> Consultes Chatbot
+        </button>
+        <button type="button" class="legend-toggle" data-series="leads">
+          <span class="legend-dot" style="background:#1c1314"></span> Contactes (WhatsApp + Formulari)
+        </button>
+      </div>
+    </section>
+
     <!-- 14-Day Activity Chart -->
     <section class="panel">
       <div class="panel-head">
@@ -939,5 +1194,179 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       ARS Advocats i Assessors Granollers, S.C.P. · Panell privat no indexat · Dades 100% anònimes sense cookies ni textos de converses.
     </p>
   </main>
+
+  <script>
+    (function () {
+      const DATA = <?= json_encode($chartPayload, JSON_UNESCAPED_UNICODE) ?>;
+      const svg = document.getElementById('evoSvg');
+      const yearSelect = document.getElementById('evoYearSelect');
+      const tooltip = document.getElementById('evoTooltip');
+      const modeBtns = document.querySelectorAll('[data-evo-mode]');
+      const legendBtns = document.querySelectorAll('[data-series]');
+
+      if (!svg || !DATA) return;
+
+      let mode = 'monthly';
+      let selectedYear = DATA.currentYear;
+      const visible = { visits: true, chat: true, leads: true };
+
+      DATA.years.forEach((yr) => {
+        const opt = document.createElement('option');
+        opt.value = yr;
+        opt.textContent = yr;
+        if (yr === selectedYear) opt.selected = true;
+        yearSelect.appendChild(opt);
+      });
+
+      function setTooltip(row) {
+        if (!row) return;
+        tooltip.innerHTML = `
+          <strong>${row.fullLabel}</strong>
+          <div class="evo-tooltip-metrics">
+            <span>Visites: <strong>${row.visits}</strong> (Google ${row.google} · IA ${row.ai})</span>
+            <span>Chatbot: <strong>${row.chat}</strong></span>
+            <span>Contactes: <strong>${row.leads}</strong> (WA ${row.wa} · Form ${row.form})</span>
+          </div>
+        `;
+      }
+
+      function render() {
+        const rows = mode === 'monthly'
+          ? (DATA.monthlyByYear[selectedYear] || [])
+          : (DATA.yearly || []);
+
+        yearSelect.style.display = mode === 'monthly' ? 'inline-block' : 'none';
+
+        const activeSeries = ['visits', 'chat', 'leads'].filter((s) => visible[s]);
+        const colors = { visits: '#d9b8b7', chat: '#c10c13', leads: '#1c1314' };
+
+        let maxVal = 1;
+        rows.forEach((r) => {
+          activeSeries.forEach((s) => {
+            if (r[s] > maxVal) maxVal = r[s];
+          });
+        });
+
+        // Round nice Y-axis ceiling
+        const niceMax = maxVal <= 4 ? 4 : Math.ceil(maxVal / 4) * 4;
+
+        const W = 760;
+        const H = 240;
+        const padL = 36;
+        const padR = 14;
+        const padT = 18;
+        const padB = 30;
+        const plotW = W - padL - padR;
+        const plotH = H - padT - padB;
+
+        const n = Math.max(1, rows.length);
+        const colW = plotW / n;
+        const groupW = Math.min(colW * 0.68, activeSeries.length * 16 + 8);
+        const barGap = 3;
+        const barW = activeSeries.length > 0
+          ? Math.max(6, Math.min(20, (groupW - barGap * (activeSeries.length - 1)) / activeSeries.length))
+          : 10;
+
+        let out = '';
+
+        // Gridlines & Y labels (4 steps)
+        for (let i = 0; i <= 4; i++) {
+          const val = Math.round((niceMax / 4) * i);
+          const y = padT + plotH - (plotH * i) / 4;
+          out += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" class="evo-grid-line" />`;
+          out += `<text x="${padL - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" class="evo-axis-text">${val}</text>`;
+        }
+
+        // Columns + bars
+        const trendPoints = [];
+        rows.forEach((r, idx) => {
+          const cx = padL + colW * idx + colW / 2;
+          const totalGroupW = activeSeries.length * barW + Math.max(0, activeSeries.length - 1) * barGap;
+          const startX = cx - totalGroupW / 2;
+
+          out += `<g class="evo-col" data-idx="${idx}">`;
+          out += `<rect class="evo-col-bg" x="${(padL + colW * idx + 2).toFixed(1)}" y="${padT}" width="${(colW - 4).toFixed(1)}" height="${plotH}" rx="6" fill="transparent" />`;
+
+          activeSeries.forEach((s, si) => {
+            const v = r[s] || 0;
+            const h = v > 0 ? Math.max(4, (v / niceMax) * plotH) : 2;
+            const x = startX + si * (barW + barGap);
+            const y = padT + plotH - h;
+            out += `<rect class="evo-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${colors[s]}" opacity="${v > 0 ? '0.92' : '0.28'}" />`;
+            if (mode === 'yearly' && v > 0) {
+              out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle" class="evo-val-text">${v}</text>`;
+            }
+          });
+
+          if (visible.leads) {
+            const ly = padT + plotH - ((r.leads || 0) / niceMax) * plotH;
+            trendPoints.push(`${cx.toFixed(1)},${ly.toFixed(1)}`);
+          }
+
+          out += `<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" class="evo-axis-text">${r.label}</text>`;
+          out += `<rect class="evo-hit" x="${(padL + colW * idx).toFixed(1)}" y="${padT}" width="${colW.toFixed(1)}" height="${plotH + padB}" />`;
+          out += `</g>`;
+        });
+
+        // Subtle trend line for Leads when 2+ points
+        if (visible.leads && trendPoints.length > 1) {
+          out += `<polyline fill="none" stroke="#1c1314" stroke-width="1.75" stroke-dasharray="4 3" opacity="0.55" points="${trendPoints.join(' ')}" pointer-events="none" />`;
+        }
+
+        svg.innerHTML = out;
+
+        // Bind hover/tap interaction
+        const cols = svg.querySelectorAll('.evo-col');
+        const activate = (idx) => {
+          cols.forEach((c) => c.classList.remove('is-active'));
+          if (cols[idx]) cols[idx].classList.add('is-active');
+          setTooltip(rows[idx]);
+        };
+
+        cols.forEach((col) => {
+          const idx = Number(col.getAttribute('data-idx'));
+          col.addEventListener('mouseenter', () => activate(idx));
+          col.addEventListener('click', () => activate(idx));
+        });
+
+        // Highlight latest active period by default
+        const defaultIdx = rows.reduce((best, r, i) => (r.visits + r.chat + r.leads > 0 ? i : best), rows.length - 1);
+        if (rows[defaultIdx]) activate(defaultIdx);
+      }
+
+      modeBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          mode = btn.getAttribute('data-evo-mode');
+          modeBtns.forEach((b) => {
+            const on = b === btn;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+          render();
+        });
+      });
+
+      yearSelect.addEventListener('change', () => {
+        selectedYear = yearSelect.value;
+        render();
+      });
+
+      legendBtns.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const s = btn.getAttribute('data-series');
+          visible[s] = !visible[s];
+          // Keep at least one series visible
+          if (!visible.visits && !visible.chat && !visible.leads) {
+            visible[s] = true;
+            return;
+          }
+          btn.classList.toggle('is-off', !visible[s]);
+          render();
+        });
+      });
+
+      render();
+    })();
+  </script>
 </body>
 </html>
