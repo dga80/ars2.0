@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 — Defecte de Forma | ARS Advocats i Assessors</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -172,7 +172,30 @@
       border-top: 1px solid rgba(221, 160, 159, 0.4);
       padding-top: 1.35rem;
       max-width: 440px;
-      margin: 0 auto;
+      margin: 0 auto 2rem;
+    }
+
+    .home-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0.85rem 1.85rem;
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-hover) 100%);
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 0.92rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      border-radius: 6px;
+      box-shadow: 0 8px 22px rgba(193, 12, 19, 0.22);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .home-btn:hover {
+      background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-dark) 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(122, 7, 12, 0.3);
     }
 
     .footer-bar {
@@ -200,8 +223,10 @@
 <body>
   <div class="container">
     <header class="brand-header">
-      <img src="assets/images/logo.png" alt="ARS Advocats i Assessors" class="brand-logo-img">
-      <span class="brand-subtitle">Granollers · Firma Legal</span>
+      <a href="/" aria-label="Tornar a l'inici d'ARS Advocats">
+        <img src="/assets/images/logo.png" alt="ARS Advocats i Assessors" class="brand-logo-img">
+      </a>
+      <span class="brand-subtitle">Granollers · Despatx d'Advocats</span>
     </header>
 
     <main class="card">
@@ -218,6 +243,11 @@
       <div class="legal-cite">
         «Causa arxivada provisionalment en virtut de les diligències tècniques incoades.»
       </div>
+
+      <a href="/" class="home-btn">
+        <span>Tornar a l'inici</span>
+        <span aria-hidden="true">&rarr;</span>
+      </a>
     </main>
 
     <footer class="footer-bar">
