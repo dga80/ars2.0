@@ -88,11 +88,16 @@ function detectSingleMessageLanguage(text) {
   let en = 0;
 
   if (/[ñ¿¡]/.test(s)) es += 4;
-  if (/[çàèò]|l·l|ny\b/.test(s)) ca += 4;
+  if (/[çàèòïü]|l·l|ny\b/.test(s)) ca += 4;
 
-  const esWords = /\b(qué|cómo|cuándo|dónde|debo|puedo|tengo|quiero|necesito|visto|han|hay|pero|también|para|por|con|sin|sobre|desde|hacer|hace|unos|unas|este|esta|esto|eso|mi|mis|me|te|nos|ellos|ella|perro|mascota|calle|barrio|policía|vecinos|alquiler|despido|herencia|divorcio|amenazado|maltratan|trabajo|empresa|contrato|deuda|juez|juicio)\b/g;
-  const caWords = /\b(què|com|quan|on|tinc|vull|estic|està|però|també|amb|sense|des|fer|aquest|aquesta|això|meu|meva|veïns|veí|lloguer|acomiadament|herència|divorci|comunitat|despatx|advocat|advocats|mobil|mòbil|molt|més|els|les|dels|pels|feina|contracte|deute|jutge|judici)\b/g;
-  const enWords = /\b(the|and|what|how|should|can|need|want|have|has|was|were|with|from|about|my|your|help|lawyer|legal|dismissed|divorce|eviction|police|threatened|inheritance|contract|tenant|rent|company)\b/g;
+  // Strictly Spanish words (avoiding shared words like "han", "he", "casa", "no", "la", "a")
+  const esWords = /\b(y|yo|ellos|ellas|ahora|fuera|mismo|misma|quieren|queremos|quiero|quieres|quiere|puedo|puedes|puede|podemos|pueden|tengo|tienes|tiene|tenemos|tienen|estoy|está|estamos|están|hemos|soy|eres|somos|son|qué|cómo|cuándo|dónde|quién|cuál|debo|debe|necesito|visto|hay|pero|también|para|por|con|sin|sobre|desde|hacer|hace|hecho|entrado|sacado|avisado|dicho|estado|ido|tenido|sido|porque|entonces|aquí|allí|nada|nadie|alguien|unos|unas|este|esta|estos|estas|esto|eso|mi|mis|me|te|nos|su|sus|los|las|muy|más|menos|perro|mascota|calle|barrio|policía|vecinos|vecino|alquiler|despido|herencia|divorcio|amenazado|maltratan|trabajo|contrato|deuda|juez|juicio|juzgado|abogado|abogados|piso|dinero)\b/g;
+
+  // Strictly Catalan words
+  const caWords = /\b(i|jo|ells|elles|em|et|ens|us|ara|fora|mateix|mateixa|volen|volem|vull|vols|vol|puc|pots|pot|podem|podeu|poden|tinc|tens|té|tenim|teniu|tenen|estic|està|estem|estan|hem|heu|sóc|soc|ets|és|som|sou|són|què|com|quan|on|qui|quin|quina|quins|quines|però|també|amb|sense|des|fer|fet|feta|entrat|tret|avisat|dit|estat|anat|tingut|sigut|pogut|volgut|cal|perquè|doncs|llavors|allà|res|algú|ningú|tothom|aquest|aquesta|aquests|aquestes|això|allò|meu|meva|meus|meves|teu|teva|seu|seva|nostre|nostra|vostre|vostra|els|les|dels|pels|als|molt|molta|molts|moltes|més|menys|veïns|veí|veïna|lloguer|acomiadament|herència|divorci|comunitat|despatx|advocat|advocats|mòbil|mobil|feina|contracte|deute|jutge|judici|jutjat|pis|carrer|barri)\b/g;
+
+  // Strictly English words
+  const enWords = /\b(the|and|what|how|should|can|need|want|have|has|was|were|with|from|about|my|your|help|lawyer|legal|dismissed|divorce|eviction|police|threatened|inheritance|contract|tenant|rent|company|please|would|could)\b/g;
 
   es += (s.match(esWords) || []).length * 2;
   ca += (s.match(caWords) || []).length * 2;
@@ -102,8 +107,9 @@ function detectSingleMessageLanguage(text) {
 
   if (es === 0 && ca === 0 && en === 0) return null;
   if (en > es && en > ca) return "en";
-  if (es >= ca) return "es";
-  return "ca";
+  if (es > ca) return "es";
+  if (ca > es) return "ca";
+  return null;
 }
 
 function detectConversationLanguage(contents, fallbackLang) {
