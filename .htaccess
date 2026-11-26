@@ -20,6 +20,7 @@ RewriteRule ^contacte/?$ /#contacte [R=301,L,NE]
 
 # 3. Seguridad: Desactivar listado de directorios y proteger archivos sensibles
 Options -Indexes
+RewriteRule ^stats-data(/|$) - [F,L]
 
 <FilesMatch "^\.(git|github|env|htaccess|gitignore|DS_Store)">
   Require all denied
