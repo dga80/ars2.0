@@ -269,10 +269,17 @@ $extractRow = function ($bucket) {
     ];
 };
 
-$monthlyByYear = [];
-$yearlySeries  = [];
+$monthlyByYear   = [];
+$quarterlyByYear = [];
+$yearlySeries    = [];
 foreach ($availableYears as $yr) {
     $monthlyByYear[$yr] = [];
+    $quarters = [
+        1 => ['label' => 'T1', 'fullLabel' => "T1 {$yr} (Gen–Mar)", 'visits' => 0, 'google' => 0, 'ai' => 0, 'chat' => 0, 'wa' => 0, 'form' => 0, 'leads' => 0],
+        2 => ['label' => 'T2', 'fullLabel' => "T2 {$yr} (Abr–Jun)", 'visits' => 0, 'google' => 0, 'ai' => 0, 'chat' => 0, 'wa' => 0, 'form' => 0, 'leads' => 0],
+        3 => ['label' => 'T3', 'fullLabel' => "T3 {$yr} (Jul–Set)", 'visits' => 0, 'google' => 0, 'ai' => 0, 'chat' => 0, 'wa' => 0, 'form' => 0, 'leads' => 0],
+        4 => ['label' => 'T4', 'fullLabel' => "T4 {$yr} (Oct–Des)", 'visits' => 0, 'google' => 0, 'ai' => 0, 'chat' => 0, 'wa' => 0, 'form' => 0, 'leads' => 0],
+    ];
     $yrTotals = ['label' => $yr, 'visits' => 0, 'google' => 0, 'ai' => 0, 'chat' => 0, 'wa' => 0, 'form' => 0, 'leads' => 0];
     foreach ($monthNames as $mm => $mLabel) {
         $ymKey = "{$yr}-{$mm}";
@@ -280,19 +287,39 @@ foreach ($availableYears as $yr) {
         $row['label'] = $mLabel;
         $row['fullLabel'] = "{$mLabel} {$yr}";
         $monthlyByYear[$yr][] = $row;
+        $qIdx = (int)ceil(((int)$mm) / 3);
         foreach (['visits', 'google', 'ai', 'chat', 'wa', 'form', 'leads'] as $f) {
+            $quarters[$qIdx][$f] += $row[$f];
             $yrTotals[$f] += $row[$f];
         }
     }
+    $quarterlyByYear[$yr] = array_values($quarters);
     $yrTotals['fullLabel'] = "Any {$yr}";
     $yearlySeries[] = $yrTotals;
 }
 
+// Sèries diàries (últims 7 i 30 dies)
+$buildDailySeries = function ($numDays) use ($data, $extractRow) {
+    $out = [];
+    for ($i = $numDays - 1; $i >= 0; $i--) {
+        $ts = strtotime("-{$i} days");
+        $dKey = date('Y-m-d', $ts);
+        $row = $extractRow($data['days'][$dKey] ?? []);
+        $row['label'] = date('d/m', $ts);
+        $row['fullLabel'] = date('d/m/Y', $ts);
+        $out[] = $row;
+    }
+    return $out;
+};
+
 $chartPayload = [
-    'currentYear'   => date('Y'),
-    'years'         => array_reverse($availableYears),
-    'monthlyByYear' => $monthlyByYear,
-    'yearly'        => $yearlySeries,
+    'currentYear'     => date('Y'),
+    'years'           => array_reverse($availableYears),
+    'days7'           => $buildDailySeries(7),
+    'days30'          => $buildDailySeries(30),
+    'monthlyByYear'   => $monthlyByYear,
+    'quarterlyByYear' => $quarterlyByYear,
+    'yearly'          => $yearlySeries,
 ];
 
 $reqPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
@@ -1121,16 +1148,19 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       </article>
     </section>
 
-    <!-- Interactive Monthly / Yearly Evolution Chart -->
+    <!-- Interactive Temporal Evolution Chart (7d / 30d / Months / Quarters / Years) -->
     <section class="panel evo-panel" id="evoChartPanel">
       <div class="panel-head">
         <div>
-          <h2 class="panel-title">Evolució per mesos i anys</h2>
+          <h2 class="panel-title">Evolució temporal</h2>
         </div>
         <div class="evo-controls">
-          <div class="seg-tabs" role="tablist" aria-label="Vista temporal">
-            <button type="button" class="seg-btn active" data-evo-mode="monthly" role="tab" aria-selected="true">Per mesos</button>
-            <button type="button" class="seg-btn" data-evo-mode="yearly" role="tab" aria-selected="false">Per anys</button>
+          <div class="seg-tabs" role="tablist" aria-label="Selector de temporalitat">
+            <button type="button" class="seg-btn" data-evo-mode="days7" role="tab" aria-selected="false">7 dies</button>
+            <button type="button" class="seg-btn" data-evo-mode="days30" role="tab" aria-selected="false">30 dies</button>
+            <button type="button" class="seg-btn active" data-evo-mode="monthly" role="tab" aria-selected="true">Mesos</button>
+            <button type="button" class="seg-btn" data-evo-mode="quarterly" role="tab" aria-selected="false">Trimestres</button>
+            <button type="button" class="seg-btn" data-evo-mode="yearly" role="tab" aria-selected="false">Anys</button>
           </div>
           <select id="evoYearSelect" class="year-select" aria-label="Seleccionar any"></select>
         </div>
@@ -1138,10 +1168,10 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
 
       <div class="evo-stage">
         <div class="evo-scroll">
-          <svg id="evoSvg" class="evo-svg" viewBox="0 0 760 240" preserveAspectRatio="none" role="img" aria-label="Gràfic evolutiu per mesos i anys"></svg>
+          <svg id="evoSvg" class="evo-svg" viewBox="0 0 760 240" preserveAspectRatio="none" role="img" aria-label="Gràfic evolutiu per temporalitat"></svg>
         </div>
         <div class="evo-tooltip" id="evoTooltip">
-          <span>Toca o passa el cursor sobre un mes o any per veure'n el detall.</span>
+          <span>Toca o passa el cursor sobre una barra per veure'n el detall.</span>
         </div>
       </div>
 
@@ -1155,38 +1185,6 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
         <button type="button" class="legend-toggle" data-series="leads">
           <span class="legend-dot" style="background:#1c1314"></span> Contactes (WhatsApp + Formulari)
         </button>
-      </div>
-    </section>
-
-    <!-- 14-Day Activity Chart -->
-    <section class="panel">
-      <div class="panel-head">
-        <h2 class="panel-title">Activitat dels últims 14 dies</h2>
-        <span class="panel-badge">Evolució diària</span>
-      </div>
-      <div class="chart-scroll">
-        <div class="chart-bars">
-          <?php foreach ($last14 as $day): ?>
-            <?php
-              $hV = $day['visits'] > 0 ? max(8, round(($day['visits'] / $maxDayVal) * 100)) : 3;
-              $hC = $day['chat']   > 0 ? max(8, round(($day['chat']   / $maxDayVal) * 100)) : 3;
-              $hL = $day['leads']  > 0 ? max(8, round(($day['leads']  / $maxDayVal) * 100)) : 3;
-            ?>
-            <div class="day-col" title="<?= $day['label'] ?> — Visites: <?= $day['visits'] ?> · Xat: <?= $day['chat'] ?> · Contactes: <?= $day['leads'] ?>">
-              <div class="day-stack">
-                <div class="vbar vbar--visits" style="height: <?= $hV ?>%"></div>
-                <div class="vbar vbar--chat"   style="height: <?= $hC ?>%"></div>
-                <div class="vbar vbar--leads"  style="height: <?= $hL ?>%"></div>
-              </div>
-              <span class="day-label"><?= $day['label'] ?></span>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </div>
-      <div class="chart-legend">
-        <span class="legend-item"><span class="legend-dot" style="background:#d9b8b7"></span> Visites</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#c10c13"></span> Consultes Chatbot</span>
-        <span class="legend-item"><span class="legend-dot" style="background:#1c1314"></span> Contactes (WhatsApp + Formulari)</span>
       </div>
     </section>
 
@@ -1231,11 +1229,14 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       }
 
       function render() {
-        const rows = mode === 'monthly'
-          ? (DATA.monthlyByYear[selectedYear] || [])
-          : (DATA.yearly || []);
+        let rows = [];
+        if (mode === 'days7') rows = DATA.days7 || [];
+        else if (mode === 'days30') rows = DATA.days30 || [];
+        else if (mode === 'quarterly') rows = DATA.quarterlyByYear[selectedYear] || [];
+        else if (mode === 'yearly') rows = DATA.yearly || [];
+        else rows = DATA.monthlyByYear[selectedYear] || [];
 
-        yearSelect.style.display = mode === 'monthly' ? 'inline-block' : 'none';
+        yearSelect.style.display = (mode === 'monthly' || mode === 'quarterly') ? 'inline-block' : 'none';
 
         const activeSeries = ['visits', 'chat', 'leads'].filter((s) => visible[s]);
         const colors = { visits: '#d9b8b7', chat: '#c10c13', leads: '#1c1314' };
@@ -1261,10 +1262,10 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
 
         const n = Math.max(1, rows.length);
         const colW = plotW / n;
-        const groupW = Math.min(colW * 0.68, activeSeries.length * 16 + 8);
-        const barGap = 3;
+        const barGap = n > 20 ? 1.5 : 3;
+        const groupW = Math.min(colW * 0.72, activeSeries.length * 16 + 8);
         const barW = activeSeries.length > 0
-          ? Math.max(6, Math.min(20, (groupW - barGap * (activeSeries.length - 1)) / activeSeries.length))
+          ? Math.max(3.5, Math.min(20, (groupW - barGap * (activeSeries.length - 1)) / activeSeries.length))
           : 10;
 
         let out = '';
@@ -1293,7 +1294,7 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
             const x = startX + si * (barW + barGap);
             const y = padT + plotH - h;
             out += `<rect class="evo-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${colors[s]}" opacity="${v > 0 ? '0.92' : '0.28'}" />`;
-            if (mode === 'yearly' && v > 0) {
+            if ((mode === 'yearly' || mode === 'quarterly') && v > 0) {
               out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle" class="evo-val-text">${v}</text>`;
             }
           });
@@ -1303,7 +1304,10 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
             trendPoints.push(`${cx.toFixed(1)},${ly.toFixed(1)}`);
           }
 
-          out += `<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" class="evo-axis-text">${r.label}</text>`;
+          const showXLabel = (n <= 15) || (idx % 5 === 0) || (idx === n - 1);
+          if (showXLabel) {
+            out += `<text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle" class="evo-axis-text">${r.label}</text>`;
+          }
           out += `<rect class="evo-hit" x="${(padL + colW * idx).toFixed(1)}" y="${padT}" width="${colW.toFixed(1)}" height="${plotH + padB}" />`;
           out += `</g>`;
         });
