@@ -129,14 +129,21 @@
 
   function detectArea(conversationText) {
     const t = conversationText.toLowerCase();
+    if (/violènci|violenci|violence|allunyament|alejamiento|restraining|masclist|machist/.test(t)) return "violencia";
     if (/divorci|divorce|custòdi|custodi|custody|aliments|alimentos|alimony|família|familia|family|conveni/.test(t)) return "familia";
     if (/accident|trànsit|tráfico|traffic|indemnitz|indemniz|compensation|crash/.test(t)) return "accidents";
     if (/herènci|herenci|inheritance|testament|wills?\b|probate|legítima|legitima|successi|estate/.test(t)) return "herencies";
-    if (/penal|criminal|detingut|detenido|detained|arrest|comissari|comisaría|police|denúnci|denunci|violènci|violenci|violence|delict|threat|amenaz|maltrat/.test(t)) return "penal";
-    if (/societat|sociedad|mercantil|corporate|commercial|company|shareholder|soci|socio|compliance|empresa/.test(t)) return "mercantil";
-    if (/acomiad|despid|dismiss|fired|unfair|laboral|employment|salari|wages|severance|finiquit|cmac|incapacitat|disability|inss/.test(t)) return "laboral";
-    if (/desnonament|desahuci|evict|lloguer|alquiler|rent|tenant|lease|arrendament|hipotec|mortgage|clàusula|clausula|comunitat|homeowner|neighbor/.test(t)) return "immobiliari";
+    if (/incapacitat|incapacidad|invalidesa|invalidez|disability|inss|mútu|mutu/.test(t)) return "incapacitats";
+    if (/comunitat|comunidad|veïns|vecin|propietat horitzontal|propiedad horizontal|homeowner|neighbor/.test(t)) return "comunitats";
+    if (/bancari|bancario|hipotec|mortgage|clàusula|clausula|revolving/.test(t)) return "bancari";
+    if (/compliance|delictes societaris|delitos societarios|estaf|fraud/.test(t)) return "compliance";
+    if (/desnonament|desahuci|evict|lloguer|alquiler|rent|tenant|lease|arrendament/.test(t)) return "immobiliari";
+    if (/monitori|impagat|impagad|reclamaci[óo] de quantitat|reclamaci[óo]n de cantidad|embarg/.test(t)) return "quantitat";
+    if (/contract|contrat|vici|incompliment|incumplimient|breach/.test(t)) return "contractes";
+    if (/penal|criminal|detingut|detenido|detained|arrest|comissari|comisaría|police|denúnci|denunci|delict|threat|amenaz|maltrat/.test(t)) return "penal";
     if (/segona oportunitat|segunda oportunidad|second chance|concurs|bankrupt|insolvenc|deute|deuda|debt/.test(t)) return "segona-oportunitat";
+    if (/societat|sociedad|mercantil|corporate|commercial|company|shareholder|soci|socio|empresa/.test(t)) return "mercantil";
+    if (/acomiad|despid|dismiss|fired|unfair|laboral|employment|salari|wages|severance|finiquit|cmac/.test(t)) return "laboral";
     return "altres";
   }
 
