@@ -338,11 +338,11 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
     }
 
     .brand h1 {
-      font-family: var(--serif);
-      font-size: clamp(1.35rem, 3vw, 1.8rem);
+      font-family: var(--sans);
+      font-size: clamp(1.15rem, 2.5vw, 1.45rem);
       font-weight: 700;
-      line-height: 1.1;
-      letter-spacing: 0.01em;
+      line-height: 1.15;
+      letter-spacing: -0.015em;
     }
 
     .brand-sub {
