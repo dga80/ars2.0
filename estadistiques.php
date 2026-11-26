@@ -575,12 +575,15 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       border-radius: 12px;
       padding: 20px;
       box-shadow: var(--shadow);
+      min-width: 0;
+      overflow: hidden;
     }
 
     .panel-head {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 10px;
       margin-bottom: 16px;
       border-bottom: 1px solid var(--border);
@@ -588,9 +591,10 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
     }
 
     .panel-title {
-      font-family: var(--serif);
-      font-size: 1.35rem;
+      font-family: var(--sans);
+      font-size: 1.05rem;
       font-weight: 700;
+      letter-spacing: -0.015em;
       color: var(--text-main);
     }
 
@@ -802,6 +806,7 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+      max-width: 100%;
     }
 
     .seg-tabs {
@@ -811,6 +816,14 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       border-radius: 9999px;
       padding: 3px;
       gap: 2px;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .seg-tabs::-webkit-scrollbar {
+      display: none;
     }
 
     .seg-btn {
@@ -818,10 +831,12 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       background: transparent;
       color: var(--text-muted);
       font-family: inherit;
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       font-weight: 600;
-      padding: 5px 12px;
+      padding: 5px 11px;
       border-radius: 9999px;
+      white-space: nowrap;
+      flex-shrink: 0;
       cursor: pointer;
       transition: all 0.18s ease;
     }
@@ -832,6 +847,54 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       box-shadow: 0 2px 8px rgba(193, 12, 19, 0.22);
     }
 
+    .evo-subcontrols {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .zoom-group {
+      display: inline-flex;
+      align-items: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 2px;
+    }
+
+    .zoom-btn {
+      width: 26px;
+      height: 26px;
+      border: none;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .zoom-btn:hover {
+      background: var(--surface-soft);
+      color: var(--accent);
+    }
+
+    .zoom-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 0 4px;
+      min-width: 34px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
     .year-select {
       font-family: inherit;
       font-size: 0.76rem;
@@ -840,7 +903,7 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 9999px;
-      padding: 6px 12px;
+      padding: 5px 11px;
       cursor: pointer;
       outline: none;
     }
@@ -852,20 +915,40 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
     .evo-stage {
       position: relative;
       width: 100%;
+      min-width: 0;
     }
 
     .evo-scroll {
+      width: 100%;
+      max-width: 100%;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      padding-bottom: 4px;
+      padding-bottom: 6px;
     }
 
     .evo-svg {
       display: block;
       width: 100%;
       min-width: 560px;
-      height: 240px;
+      height: 235px;
       overflow: visible;
+    }
+
+    .evo-hint {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: none;
+    }
+
+    @media (max-width: 640px) {
+      .evo-controls {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .evo-hint {
+        display: block;
+      }
     }
 
     .evo-grid-line {
@@ -1162,14 +1245,22 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
             <button type="button" class="seg-btn" data-evo-mode="quarterly" role="tab" aria-selected="false">Trimestres</button>
             <button type="button" class="seg-btn" data-evo-mode="yearly" role="tab" aria-selected="false">Anys</button>
           </div>
-          <select id="evoYearSelect" class="year-select" aria-label="Seleccionar any"></select>
+          <div class="evo-subcontrols">
+            <select id="evoYearSelect" class="year-select" aria-label="Seleccionar any"></select>
+            <div class="zoom-group" aria-label="Zoom del gràfic">
+              <button type="button" class="zoom-btn" id="evoZoomOut" title="Reduir">−</button>
+              <span class="zoom-label" id="evoZoomLabel">100%</span>
+              <button type="button" class="zoom-btn" id="evoZoomIn" title="Augmentar">+</button>
+            </div>
+          </div>
         </div>
       </div>
 
       <div class="evo-stage">
-        <div class="evo-scroll">
+        <div class="evo-scroll" id="evoScroll">
           <svg id="evoSvg" class="evo-svg" viewBox="0 0 760 240" preserveAspectRatio="none" role="img" aria-label="Gràfic evolutiu per temporalitat"></svg>
         </div>
+        <div class="evo-hint">← Llisca cap a l'esquerra per veure dates anteriors</div>
         <div class="evo-tooltip" id="evoTooltip">
           <span>Toca o passa el cursor sobre una barra per veure'n el detall.</span>
         </div>
@@ -1197,8 +1288,12 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
     (function () {
       const DATA = <?= json_encode($chartPayload, JSON_UNESCAPED_UNICODE) ?>;
       const svg = document.getElementById('evoSvg');
+      const evoScroll = document.getElementById('evoScroll');
       const yearSelect = document.getElementById('evoYearSelect');
       const tooltip = document.getElementById('evoTooltip');
+      const zoomOutBtn = document.getElementById('evoZoomOut');
+      const zoomInBtn = document.getElementById('evoZoomIn');
+      const zoomLabel = document.getElementById('evoZoomLabel');
       const modeBtns = document.querySelectorAll('[data-evo-mode]');
       const legendBtns = document.querySelectorAll('[data-series]');
 
@@ -1206,7 +1301,23 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
 
       let mode = 'monthly';
       let selectedYear = DATA.currentYear;
+      const zoomSteps = [0.7, 1, 1.4, 1.8, 2.3];
+      let zoomIdx = 1;
       const visible = { visits: true, chat: true, leads: true };
+
+      function applyZoom(scrollToRight) {
+        const z = zoomSteps[zoomIdx];
+        const baseW = mode === 'days30' ? 760 : (mode === 'monthly' ? 600 : 460);
+        const targetW = Math.round(baseW * z);
+        svg.style.minWidth = (z <= 0.75 ? 0 : targetW) + 'px';
+        svg.style.width = z > 1 ? targetW + 'px' : '100%';
+        if (zoomLabel) zoomLabel.textContent = Math.round(z * 100) + '%';
+        if (scrollToRight && evoScroll) {
+          requestAnimationFrame(() => {
+            evoScroll.scrollLeft = evoScroll.scrollWidth;
+          });
+        }
+      }
 
       DATA.years.forEach((yr) => {
         const opt = document.createElement('option');
@@ -1336,6 +1447,26 @@ $buildUrl = function ($period) use ($isPrettyUrl, $key) {
         // Highlight latest active period by default
         const defaultIdx = rows.reduce((best, r, i) => (r.visits + r.chat + r.leads > 0 ? i : best), rows.length - 1);
         if (rows[defaultIdx]) activate(defaultIdx);
+
+        applyZoom(true);
+      }
+
+      if (zoomOutBtn) {
+        zoomOutBtn.addEventListener('click', () => {
+          if (zoomIdx > 0) {
+            zoomIdx--;
+            applyZoom(true);
+          }
+        });
+      }
+
+      if (zoomInBtn) {
+        zoomInBtn.addEventListener('click', () => {
+          if (zoomIdx < zoomSteps.length - 1) {
+            zoomIdx++;
+            applyZoom(true);
+          }
+        });
       }
 
       modeBtns.forEach((btn) => {
