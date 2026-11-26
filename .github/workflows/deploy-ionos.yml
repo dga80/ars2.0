@@ -45,7 +45,7 @@ jobs:
               except Exception as e:
                   print(f"Aviso con directorio {remote_base}: {e}")
 
-          exclude_names = {'.git', '.github', 'ars2-web.zip', 'GEMINI.md', 'rewebars', '.DS_Store'}
+          exclude_names = {'.git', '.github', 'api', 'vercel.json', 'ars2-web.zip', 'GEMINI.md', 'rewebars', '.DS_Store'}
 
           def ensure_remote_dir(remote_path):
               dirs = [d for d in remote_path.split('/') if d]
