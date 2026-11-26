@@ -239,6 +239,15 @@ $formatMonth = function ($ym) use ($monthNames) {
 $updatedLabel = !empty($data['updated_at'])
     ? date('d/m/Y · H:i', strtotime($data['updated_at']))
     : 'Sense activitat registrada encara';
+
+$reqPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+$isPrettyUrl = (strpos($reqPath, '/panell-ars') === 0);
+$buildUrl = function ($period) use ($isPrettyUrl, $key) {
+    if ($isPrettyUrl) {
+        return '/panell-ars?m=' . urlencode($period);
+    }
+    return '?k=' . urlencode($key) . '&m=' . urlencode($period);
+};
 ?>
 <!DOCTYPE html>
 <html lang="ca">
@@ -750,14 +759,14 @@ $updatedLabel = !empty($data['updated_at'])
   <main class="wrap">
     <div class="period-bar">
       <nav class="period-pills" aria-label="Selector de període">
-        <a href="?k=<?= urlencode($key) ?>&m=all" class="pill <?= $selectedPeriod === 'all' ? 'active' : '' ?>">Històric total</a>
+        <a href="<?= htmlspecialchars($buildUrl('all'), ENT_QUOTES, 'UTF-8') ?>" class="pill <?= $selectedPeriod === 'all' ? 'active' : '' ?>">Històric total</a>
         <?php foreach ($availableMonths as $ym): ?>
-          <a href="?k=<?= urlencode($key) ?>&m=<?= urlencode($ym) ?>" class="pill <?= $selectedPeriod === $ym ? 'active' : '' ?>">
+          <a href="<?= htmlspecialchars($buildUrl($ym), ENT_QUOTES, 'UTF-8') ?>" class="pill <?= $selectedPeriod === $ym ? 'active' : '' ?>">
             <?= htmlspecialchars($formatMonth($ym), ENT_QUOTES, 'UTF-8') ?>
           </a>
         <?php endforeach; ?>
       </nav>
-      <a href="?k=<?= urlencode($key) ?>&m=<?= urlencode($selectedPeriod) ?>" class="refresh-link">↻ Actualitzar</a>
+      <a href="<?= htmlspecialchars($buildUrl($selectedPeriod), ENT_QUOTES, 'UTF-8') ?>" class="refresh-link">↻ Actualitzar</a>
     </div>
 
     <!-- 4 Hero KPIs -->
