@@ -26,7 +26,34 @@ const DEFAULT_MODELS = [
 const HEADER_TIMEOUT_MS = 6500;
 const RATE_LIMIT_MAX = 15;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_USER_TURNS = 12;
 const ipHits = new Map();
+
+const TURN_LIMIT_MESSAGES = {
+  ca: "Hem assolit el límit de consultes orientatives d'aquesta sessió. Per continuar amb el seu cas de manera personalitzada, pot enviar el resum al formulari, continuar per WhatsApp o trucar directament al 938 795 876.",
+  es: "Hemos alcanzado el límite de consultas orientativas de esta sesión. Para continuar con su caso de forma personalizada, puede enviar el resumen al formulario, continuar por WhatsApp o llamar directamente al 938 795 876.",
+  en: "We have reached the guidance limit for this session. To continue with your matter directly with a lawyer, please use the contact form or WhatsApp buttons below, or call +34 938 795 876.",
+};
+
+function detectArea(text) {
+  const t = String(text || "").toLowerCase();
+  if (/violènci|violenci|violence|allunyament|alejamiento|restraining|masclist|machist/.test(t)) return "violencia";
+  if (/divorci|divorce|custòdi|custodi|custody|aliments|alimentos|alimony|família|familia|family|conveni/.test(t)) return "familia";
+  if (/accident|trànsit|tráfico|traffic|indemnitz|indemniz|compensation|crash/.test(t)) return "accidents";
+  if (/herènci|herenci|inheritance|testament|wills?\b|probate|legítima|legitima|successi|estate/.test(t)) return "herencies";
+  if (/incapacitat|incapacidad|invalidesa|invalidez|disability|inss|mútu|mutu/.test(t)) return "incapacitats";
+  if (/comunitat|comunidad|veïns|vecin|propietat horitzontal|propiedad horizontal|homeowner|neighbor/.test(t)) return "comunitats";
+  if (/bancari|bancario|hipotec|mortgage|clàusula|clausula|revolving/.test(t)) return "bancari";
+  if (/compliance|delictes societaris|delitos societarios|estaf|fraud/.test(t)) return "compliance";
+  if (/desnonament|desahuci|evict|lloguer|alquiler|rent|tenant|lease|arrendament/.test(t)) return "immobiliari";
+  if (/monitori|impagat|impagad|reclamaci[óo] de quantitat|reclamaci[óo]n de cantidad|embarg/.test(t)) return "quantitat";
+  if (/contract|contrat|vici|incompliment|incumplimient|breach/.test(t)) return "contractes";
+  if (/penal|criminal|detingut|detenido|detained|arrest|comissari|comisaría|police|denúnci|denunci|delict|threat|amenaz|maltrat/.test(t)) return "penal";
+  if (/segona oportunitat|segunda oportunidad|second chance|concurs|bankrupt|insolvenc|deute|deuda|debt/.test(t)) return "segona_oportunitat";
+  if (/societat|sociedad|mercantil|corporate|commercial|company|shareholder|soci|socio|empresa/.test(t)) return "mercantil";
+  if (/acomiad|despid|dismiss|fired|unfair|laboral|employment|salari|wages|severance|finiquit|cmac/.test(t)) return "laboral";
+  return "altres";
+}
 
 const SAFETY_SETTINGS = [
   { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
@@ -140,7 +167,7 @@ function getCorsHeaders(origin) {
     "Access-Control-Allow-Origin": allowed ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Expose-Headers": "X-ARS-Model, X-ARS-Lang",
+    "Access-Control-Expose-Headers": "X-ARS-Model, X-ARS-Lang, X-ARS-Limit",
     "Vary": "Origin",
   };
 }
@@ -226,8 +253,12 @@ async function discoverFlashModel(apiKey) {
   }
 }
 
-function trackProdChatMessage(origin) {
-  if (origin !== "https://www.arsadvocats.com" && origin !== "https://arsadvocats.com") {
+function trackProdChatEvents(origin, events) {
+  if (
+    (origin !== "https://www.arsadvocats.com" && origin !== "https://arsadvocats.com") ||
+    !Array.isArray(events) ||
+    events.length === 0
+  ) {
     return null;
   }
   const controller = new AbortController();
@@ -238,7 +269,7 @@ function trackProdChatMessage(origin) {
       "Content-Type": "application/json",
       "Origin": "https://www.arsadvocats.com",
     },
-    body: JSON.stringify({ events: ["chat_message"] }),
+    body: JSON.stringify({ events }),
     signal: controller.signal,
   })
     .catch(() => {})
@@ -323,11 +354,46 @@ export default async function handler(request) {
     });
   }
 
-  // Track real production chatbot queries server-side (immune to adblockers/sendBeacon blocks)
-  const trackPromise = trackProdChatMessage(origin);
-
   const replyLang = detectConversationLanguage(contents, lang);
-  const userTurnCount = contents.filter((c) => c.role === "user").length;
+  const userMsgs = contents
+    .filter((c) => c.role === "user")
+    .map((c) => c.parts?.[0]?.text || "");
+  const userTurnCount = userMsgs.length;
+
+  // Enforce session turn cap before spending Gemini tokens
+  if (userTurnCount > MAX_USER_TURNS) {
+    return new Response(TURN_LIMIT_MESSAGES[replyLang] || TURN_LIMIT_MESSAGES.ca, {
+      status: 200,
+      headers: {
+        ...cors,
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "X-ARS-Lang": replyLang,
+        "X-ARS-Limit": "1",
+      },
+    });
+  }
+
+  // Track real production chatbot queries, sessions, language, and area server-side (100% anonymous RGPD)
+  const eventsToTrack = ["chat_message"];
+  if (userTurnCount === 1) {
+    eventsToTrack.push("chat_session", `lang_${replyLang}`);
+    const detected = detectArea(userMsgs[0]);
+    if (detected !== "altres") {
+      eventsToTrack.push(`area_${detected}`);
+    }
+  } else {
+    const prevArea = detectArea(userMsgs.slice(0, -1).join(" "));
+    if (prevArea === "altres") {
+      const currentArea = detectArea(userMsgs.join(" "));
+      if (currentArea !== "altres") {
+        eventsToTrack.push(`area_${currentArea}`);
+      } else if (userTurnCount === 2) {
+        eventsToTrack.push("area_altres");
+      }
+    }
+  }
+  const trackPromise = trackProdChatEvents(origin, eventsToTrack);
 
   const langDirectives = {
     es: "MANDATORY OUTPUT LANGUAGE: SPANISH (Castellano). Write your ENTIRE response strictly in formal Spanish using 'usted' consistently (never 'tú'), with a sober, calm tone and no exclamation marks. Do NOT use Catalan words.",
