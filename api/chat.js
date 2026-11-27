@@ -226,6 +226,25 @@ async function discoverFlashModel(apiKey) {
   }
 }
 
+function trackProdChatMessage(origin) {
+  if (origin !== "https://www.arsadvocats.com" && origin !== "https://arsadvocats.com") {
+    return null;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  return fetch("https://www.arsadvocats.com/estadistiques.php", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Origin": "https://www.arsadvocats.com",
+    },
+    body: JSON.stringify({ events: ["chat_message"] }),
+    signal: controller.signal,
+  })
+    .catch(() => {})
+    .finally(() => clearTimeout(timer));
+}
+
 export default async function handler(request) {
   const origin = request.headers.get("Origin") || "";
   const cors = getCorsHeaders(origin);
@@ -303,6 +322,9 @@ export default async function handler(request) {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   }
+
+  // Track real production chatbot queries server-side (immune to adblockers/sendBeacon blocks)
+  const trackPromise = trackProdChatMessage(origin);
 
   const replyLang = detectConversationLanguage(contents, lang);
   const userTurnCount = contents.filter((c) => c.role === "user").length;
@@ -415,6 +437,10 @@ export default async function handler(request) {
         headers: { ...cors, "Content-Type": "application/json" },
       }
     );
+  }
+
+  if (trackPromise) {
+    await trackPromise;
   }
 
   return new Response(upstream.body, {
