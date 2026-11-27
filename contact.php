@@ -28,6 +28,7 @@ $area    = isset($_POST['area']) ? trim(strip_tags($_POST['area'])) : '';
 $message = isset($_POST['message']) ? trim(strip_tags($_POST['message'])) : '';
 $consent = isset($_POST['consent']) && ($_POST['consent'] === '1' || $_POST['consent'] === 'on' || $_POST['consent'] === 'true');
 $lang    = isset($_POST['lang']) && in_array($_POST['lang'], ['ca', 'es', 'en']) ? $_POST['lang'] : 'ca';
+$fromChat = isset($_POST['from_chat']) && $_POST['from_chat'] === '1';
 
 // 3. Validation
 $errors = [];
@@ -101,6 +102,58 @@ $headers[] = 'Content-Type: text/plain; charset=UTF-8';
 $sent = @mail($to, $subject, $body, implode("\r\n", $headers));
 
 if ($sent) {
+    // Server-side RGPD-compliant anonymous form counter (immune to adblockers)
+    try {
+        $statsDir  = __DIR__ . '/stats-data';
+        $statsFile = $statsDir . '/metrics.json';
+        if (!is_dir($statsDir)) {
+            @mkdir($statsDir, 0750, true);
+        }
+        $fp = @fopen($statsFile, 'c+');
+        if ($fp && flock($fp, LOCK_EX)) {
+            rewind($fp);
+            $content = stream_get_contents($fp);
+            $data = json_decode($content ?: '', true);
+            if (!is_array($data)) {
+                $data = ['totals' => [], 'months' => [], 'days' => []];
+            }
+            $data['totals'] = isset($data['totals']) && is_array($data['totals']) ? $data['totals'] : [];
+            $data['months'] = isset($data['months']) && is_array($data['months']) ? $data['months'] : [];
+            $data['days']   = isset($data['days'])   && is_array($data['days'])   ? $data['days']   : [];
+
+            $ev       = $fromChat ? 'web_form_from_chat' : 'web_form_direct';
+            $monthKey = date('Y-m');
+            $dayKey   = date('Y-m-d');
+
+            if (!isset($data['months'][$monthKey]) || !is_array($data['months'][$monthKey])) {
+                $data['months'][$monthKey] = [];
+            }
+            if (!isset($data['days'][$dayKey]) || !is_array($data['days'][$dayKey])) {
+                $data['days'][$dayKey] = [];
+            }
+
+            $data['totals'][$ev]            = (int)($data['totals'][$ev] ?? 0) + 1;
+            $data['months'][$monthKey][$ev] = (int)($data['months'][$monthKey][$ev] ?? 0) + 1;
+            $data['days'][$dayKey][$ev]     = (int)($data['days'][$dayKey][$ev] ?? 0) + 1;
+
+            if (count($data['days']) > 60) {
+                ksort($data['days']);
+                $data['days'] = array_slice($data['days'], -60, null, true);
+            }
+
+            $data['updated_at'] = date('c');
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+    } catch (Throwable $e) {
+        // Never affect form success response
+    }
+
     echo json_encode(['success' => true]);
 } else {
     // If local mail fails, return error
