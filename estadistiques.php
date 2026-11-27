@@ -63,6 +63,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $rawBody = file_get_contents('php://input');
     $payload = json_decode($rawBody ?: '', true);
+
+    // Optional admin date rebalance (protected by ARS_STATS_KEY)
+    if (
+        is_array($payload) &&
+        isset($payload['admin_key']) &&
+        is_string($payload['admin_key']) &&
+        hash_equals(ARS_STATS_KEY, $payload['admin_key']) &&
+        isset($payload['adjust']) &&
+        is_array($payload['adjust'])
+    ) {
+        if (!is_dir(ARS_DATA_DIR)) {
+            @mkdir(ARS_DATA_DIR, 0750, true);
+        }
+        $fp = @fopen(ARS_DATA_FILE, 'c+');
+        if ($fp && flock($fp, LOCK_EX)) {
+            rewind($fp);
+            $content = stream_get_contents($fp);
+            $data = json_decode($content ?: '', true);
+            if (!is_array($data)) {
+                $data = ['totals' => [], 'months' => [], 'days' => []];
+            }
+            $data['totals'] = isset($data['totals']) && is_array($data['totals']) ? $data['totals'] : [];
+            $data['months'] = isset($data['months']) && is_array($data['months']) ? $data['months'] : [];
+            $data['days']   = isset($data['days'])   && is_array($data['days'])   ? $data['days']   : [];
+
+            foreach ($payload['adjust'] as $item) {
+                if (!is_array($item)) continue;
+                $day   = isset($item['day']) && is_string($item['day']) ? $item['day'] : '';
+                $ev    = isset($item['event']) && is_string($item['event']) ? $item['event'] : '';
+                $delta = isset($item['delta']) ? (int)$item['delta'] : 0;
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $day) || !in_array($ev, $ALLOWED_EVENTS, true) || $delta === 0) {
+                    continue;
+                }
+                $ym = substr($day, 0, 7);
+                if (!isset($data['months'][$ym]) || !is_array($data['months'][$ym])) {
+                    $data['months'][$ym] = [];
+                }
+                if (!isset($data['days'][$day]) || !is_array($data['days'][$day])) {
+                    $data['days'][$day] = [];
+                }
+                $data['totals'][$ev]       = max(0, (int)($data['totals'][$ev] ?? 0) + $delta);
+                $data['months'][$ym][$ev]  = max(0, (int)($data['months'][$ym][$ev] ?? 0) + $delta);
+                $data['days'][$day][$ev]   = max(0, (int)($data['days'][$day][$ev] ?? 0) + $delta);
+            }
+
+            $data['updated_at'] = date('c');
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+        http_response_code(204);
+        exit;
+    }
+
     $events = [];
 
     if (is_array($payload)) {
